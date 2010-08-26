@@ -9,13 +9,39 @@
 
 	<description>Usertagging for PunBB enables 'user tagging' which is the tagging feature you see on a lot of social networking websites like Facebook or Twitter that allows you to directly address a user by putting an at symbol in front of their username, like @username. Right now, the modification only adds a link to the user's profile in posts and alerts the user who has been tagged, but there are plans for a tag 'leaderboard' where users can see who is being tagged most and where.</description>
 
-	<author>Nuri Hodges</author>
+	<author>Nuri Hodges + Cody Robertson (Robot Smile)</author>
 
 	<minversion>1.3</minversion>
 	<maxtestedon>1.3.4</maxtestedon>
 
+	<install><![CDATA[
+		$forum_db->add_field("users", "notify_on_usertag_created", "tinyint(1)", true, 1);
+	  ]]></install>
+
+	<uninstall><![CDATA[
+		$forum_db->drop_field("users", "notify_on_usertag_created");
+	]]></uninstall>
+
 	<hooks>
 		
+		<hook id="pf_change_details_settings_validation"><![CDATA[
+			$form['notify_on_usertag_created'] = (isset($form['notify_on_usertag_created'])) ? intval($form['notify_on_usertag_created']) : 1;
+		]]></hook>
+
+		<hook id="pf_change_details_settings_subscription_fieldset_end"><![CDATA[
+				?>
+				<fieldset class="mf-set set<?php echo ++$forum_page['item_count'] ?>">
+					<legend><span>Usertagging Settings</span></legend>
+					<div class="mf-box">
+						<div class="mf-item">
+							<span class="fld-input"><input type="checkbox" id="fld<?php echo ++$forum_page['fld_count'] ?>" name="form[notify_on_usertag_created]" value="1"<?php if ($user['notify_on_usertag_created'] == '1') echo ' checked="checked"' ?> /></span>
+							<label for="fld<?php echo $forum_page['fld_count'] ?>">Notify me only on threads I've created</label>
+						</div>
+					</div>
+				</fieldset>	
+				<?php		
+		]]></hook>
+
 		<hook id="vt_row_pre_display"><![CDATA[
 		
 			preg_match_all("/@[a-zA-Z0-9_-]+/", $forum_page['message']['message'], $matches);
@@ -90,7 +116,7 @@
 							# Check if the user tagged has permissions to read the thread
 						
 								$q = array(
-									'SELECT'	=> 'subject',
+									'SELECT'	=> 'subject, poster',
 									'FROM'		=> 'topics AS t',
 									'JOINS'		=> array(
 										array(
@@ -102,6 +128,7 @@
 								);
 							
 								$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
+								$topic_creator = $r['poster'];
 							
 								if (!$forum_db->num_rows($r)) { message($lang_common['Bad request']); }
 							
@@ -118,7 +145,10 @@
 							# Subscribe the tagged user to the post/topic, send subscription, then unsubscribe the user
 						
 								if(!$forum_db->num_rows($r)) {
-							
+									if ($punbb_user['notify_on_usertag_created'] && $punbb_user['username'] != $topic_creator) {								
+										exit();
+									}
+
 									$q = array(
 										'UPDATE'	=> 'users',
 										'SET'		=> 'notify_with_post=1',
