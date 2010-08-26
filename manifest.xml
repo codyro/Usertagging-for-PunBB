@@ -25,28 +25,33 @@
 				$matches = $matches[0];
 				
 				foreach($matches as $key => $val) {
+
+					$username = substr($val,1);
+
+					if (strlen($username) < 25 && strlen($username) > 2) {
+
+						$q = array(
+					
+							'SELECT' => 'u.username, u.id',
+							'FROM'   => 'users AS u',
+							'WHERE'  => 'u.username = \'' . $username . '\'',
+							'LIMIT'  => '0,1'
+					
+						);
+					
+						$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
+					
+						if($forum_db->num_rows($r) > 0) {
+					
+							$punbb_user = $forum_db->fetch_assoc($r);
+					
+							$forum_page['message']['message'] = preg_replace("/(" . $val . ")/", "<a href=\"" . forum_link($forum_url['user'], $punbb_user['id']) . "\">$1</a>", $forum_page['message']['message']);
+					
+						}
 				
-					$q = array(
-					
-						'SELECT' => 'u.username, u.id',
-						'FROM'   => 'users AS u',
-						'WHERE'  => 'u.username = \'' . substr($val, 1) . '\'',
-						'LIMIT'  => '0,1'
-					
-					);
-					
-					$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
-					
-					if($forum_db->num_rows($r) > 0) {
-					
-						$punbb_user = $forum_db->fetch_assoc($r);
-					
-						$forum_page['message']['message'] = preg_replace("/(" . $val . ")/", "<a href=\"" . forum_link($forum_url['user'], $punbb_user['id']) . "\">$1</a>", $forum_page['message']['message']);
-					
 					}
-				
-				}
 			
+				}
 			}
 		
 		]]></hook>
@@ -60,105 +65,110 @@
 				$matches = $matches[0];
 			
 				foreach($matches as $key => $val) {
+
+					$username = substr($val, 1);
 				
-					$q = array(
+					if (strlen($username) < 25 && strlen($username) > 2) {				
+
+						$q = array(
 					
-						'SELECT' => 'u.username, u.id, u.group_id',
-						'FROM'   => 'users AS u',
-						'WHERE'  => 'u.username = \'' . substr($val, 1) . '\'',
-						'LIMIT'  => '0,1'
+							'SELECT' => 'u.username, u.id, u.group_id',
+							'FROM'   => 'users AS u',
+							'WHERE'  => 'u.username = \'' . $username . '\'',
+							'LIMIT'  => '0,1'
 					
-					);
+						);
 					
-					$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
+						$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
 					
-					if($forum_db->num_rows($r) > 0) {
+						if($forum_db->num_rows($r) > 0) {
 					
-						$punbb_user = $forum_db->fetch_assoc($r);
+							$punbb_user = $forum_db->fetch_assoc($r);
 						
-						$usertag_topicid = isset($post_info['topic_id']) ? $post_info['topic_id'] : $new_tid;
+							$usertag_topicid = isset($post_info['topic_id']) ? $post_info['topic_id'] : $new_tid;
 						
-						# Check if the user tagged has permissions to read the thread
+							# Check if the user tagged has permissions to read the thread
 						
-							$q = array(
-								'SELECT'	=> 'subject',
-								'FROM'		=> 'topics AS t',
-								'JOINS'		=> array(
-									array(
-										'LEFT JOIN'		=> 'forum_perms AS fp',
-										'ON'			=> '(fp.forum_id=t.forum_id AND fp.group_id=' . $punbb_user['group_id'] . ')'
-									)
-								),
-								'WHERE'		=> '(fp.read_forum IS NULL OR fp.read_forum=1) AND t.id=' . $usertag_topicid . ' AND t.moved_to IS NULL'
-							);
-							
-							$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
-							
-							if (!$forum_db->num_rows($r)) { message($lang_common['Bad request']); }
-							
-						# Check if the user is already subscribed
-						
-							$q = array(
-								'SELECT'	=> '1',
-								'FROM'		=> 'subscriptions AS s',
-								'WHERE'		=> 'user_id=' . $punbb_user['id'] . ' AND topic_id=' . $usertag_topicid
-							);
-							
-							$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
-							
-						# Subscribe the tagged user to the post/topic, send subscription, then unsubscribe the user
-						
-							if(!$forum_db->num_rows($r)) {
-							
 								$q = array(
-									'UPDATE'	=> 'users',
-									'SET'		=> 'notify_with_post=1',
-									'WHERE'		=> 'id=' . $punbb_user['id']
+									'SELECT'	=> 'subject',
+									'FROM'		=> 'topics AS t',
+									'JOINS'		=> array(
+										array(
+											'LEFT JOIN'		=> 'forum_perms AS fp',
+											'ON'			=> '(fp.forum_id=t.forum_id AND fp.group_id=' . $punbb_user['group_id'] . ')'
+										)
+									),
+									'WHERE'		=> '(fp.read_forum IS NULL OR fp.read_forum=1) AND t.id=' . $usertag_topicid . ' AND t.moved_to IS NULL'
 								);
-								
-								$forum_db->query_build($q) or error(__FILE__, __LINE__);
-								
-								$notify_reset = ($forum_db->affected_rows() > 0) ? true : false;
-								
+							
+								$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
+							
+								if (!$forum_db->num_rows($r)) { message($lang_common['Bad request']); }
+							
+							# Check if the user is already subscribed
+						
 								$q = array(
-									'INSERT'	=> 'user_id, topic_id',
-									'INTO'		=> 'subscriptions',
-									'VALUES'	=> $punbb_user['id'] . ' ,' . $usertag_topicid
-								);
-								
-								$forum_db->query_build($q) or error(__FILE__, __LINE__);
-								
-								# Pass topic id onto send_subscription if it's a new topic
-								
-									if(!isset($post_info['topic_id'])) { $post_info['topic_id'] = $usertag_topicid; }
-								
-								send_subscriptions($post_info, $new_pid);
-								
-								$q = array(
-									'DELETE'	=> 'subscriptions',
+									'SELECT'	=> '1',
+									'FROM'		=> 'subscriptions AS s',
 									'WHERE'		=> 'user_id=' . $punbb_user['id'] . ' AND topic_id=' . $usertag_topicid
 								);
-								
-								$forum_db->query_build($q) or error(__FILE__, __LINE__);
-								
-								if($notify_reset) {
-								
+							
+								$r = $forum_db->query_build($q) or error(__FILE__, __LINE__);
+							
+							# Subscribe the tagged user to the post/topic, send subscription, then unsubscribe the user
+						
+								if(!$forum_db->num_rows($r)) {
+							
 									$q = array(
 										'UPDATE'	=> 'users',
-										'SET'		=> 'notify_with_post=0',
+										'SET'		=> 'notify_with_post=1',
 										'WHERE'		=> 'id=' . $punbb_user['id']
 									);
-									
+								
 									$forum_db->query_build($q) or error(__FILE__, __LINE__);
 								
-								}
+									$notify_reset = ($forum_db->affected_rows() > 0) ? true : false;
+								
+									$q = array(
+										'INSERT'	=> 'user_id, topic_id',
+										'INTO'		=> 'subscriptions',
+										'VALUES'	=> $punbb_user['id'] . ' ,' . $usertag_topicid
+									);
+								
+									$forum_db->query_build($q) or error(__FILE__, __LINE__);
+								
+									# Pass topic id onto send_subscription if it's a new topic
+								
+										if(!isset($post_info['topic_id'])) { $post_info['topic_id'] = $usertag_topicid; }
+								
+									send_subscriptions($post_info, $new_pid);
+								
+									$q = array(
+										'DELETE'	=> 'subscriptions',
+										'WHERE'		=> 'user_id=' . $punbb_user['id'] . ' AND topic_id=' . $usertag_topicid
+									);
+								
+									$forum_db->query_build($q) or error(__FILE__, __LINE__);
+								
+									if($notify_reset) {
+								
+										$q = array(
+											'UPDATE'	=> 'users',
+											'SET'		=> 'notify_with_post=0',
+											'WHERE'		=> 'id=' . $punbb_user['id']
+										);
+									
+										$forum_db->query_build($q) or error(__FILE__, __LINE__);
+								
+									}
 							
-							}
+								}
 					
+						}
+				
 					}
 				
 				}
-				
 			}
 		
 		]]></hook>
